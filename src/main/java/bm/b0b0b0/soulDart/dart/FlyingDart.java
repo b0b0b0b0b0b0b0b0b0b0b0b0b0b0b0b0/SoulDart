@@ -76,42 +76,44 @@ public final class FlyingDart {
             return false;
         }
 
-        target = findNearestTarget();
+        target = findNearestVisibleTarget();
 
         Vector desiredMovement;
-        Vector desiredDirection;
 
         if (target != null) {
-            desiredDirection = desiredAimDirection();
-            Vector toTargetFromAnchor = aimPoint(target).subtract(anchor.toVector());
-            if (toTargetFromAnchor.lengthSquared() > 0.01) {
-                toTargetFromAnchor.normalize();
-            } else {
-                toTargetFromAnchor = noseDirection();
-            }
-            desiredMovement = combatMovement(toTargetFromAnchor);
+            Vector desiredAim = desiredAimDirection();
+            float turnSpeed = (float) (burstShotsLeft > 0
+                    ? config.targetTurnSpeed() * 1.5
+                    : config.targetTurnSpeed() * 1.15);
+            approachOrientation(desiredAim, turnSpeed);
+            desiredMovement = combatMovement();
         } else {
+            if (burstShotsLeft > 0) {
+                burstShotsLeft = 0;
+            }
             wanderTimer++;
-            if (wanderTimer >= 45) {
+            if (wanderTimer >= 40) {
                 wanderTimer = 0;
-                wanderYaw += ThreadLocalRandom.current().nextFloat() * 20f - 10f;
+                wanderYaw += ThreadLocalRandom.current().nextFloat() * 28f - 14f;
             }
-            Vector flat = DartVisual.directionFromOrientation(wanderYaw, 0f);
-            desiredMovement = flat.multiply(config.flightSpeed() * 0.55);
-            if (velocity.lengthSquared() > 0.0064) {
-                desiredDirection = velocity.clone().normalize();
-            } else {
-                desiredDirection = flat;
-            }
+            Vector wanderDirection = DartVisual.directionFromOrientation(wanderYaw, 0f);
+            approachOrientation(wanderDirection, (float) config.wanderTurnSpeed());
+            desiredMovement = noseDirection().multiply(config.flightSpeed() * 0.5);
         }
 
-        float turnSpeed = target != null
-                ? (float) (burstShotsLeft > 0 ? config.targetTurnSpeed() * 1.5 : config.targetTurnSpeed() * 1.15)
-                : (float) config.wanderTurnSpeed();
-        approachOrientation(desiredDirection, turnSpeed);
-
-        double inertia = target != null ? config.chaseVelocityInertia() : config.velocityInertia();
-        velocity.multiply(1.0 - inertia).add(desiredMovement.multiply(inertia));
+        if (target != null) {
+            if (desiredMovement.lengthSquared() > 0.0001) {
+                velocity = desiredMovement;
+            } else {
+                Vector nose = noseDirection();
+                velocity = nose.multiply(velocity.dot(nose) * 0.65);
+            }
+        } else {
+            double inertia = config.velocityInertia();
+            velocity.multiply(1.0 - inertia).add(desiredMovement.multiply(inertia));
+            Vector nose = noseDirection();
+            velocity = nose.multiply(velocity.dot(nose));
+        }
 
         Vector lateral = DartVisual.lateralFromOrientation(orientation);
         double bob = target == null ? Math.sin(age * 0.11) * config.bobAmplitude() : 0;
@@ -161,49 +163,29 @@ public final class FlyingDart {
     }
 
     private void approachOrientation(Vector desiredDirection, float maxStepDegrees) {
-        Vector currentDirection = noseDirection();
-        Vector desired = desiredDirection.clone();
-        if (desired.lengthSquared() < 0.0001) {
-            return;
-        }
-        desired.normalize();
-
-        double dot = clamp(currentDirection.dot(desired), -1.0, 1.0);
-        double angle = Math.acos(dot);
-        if (angle < 0.0001) {
-            orientation.set(DartVisual.orientationFromDirection(desired));
-            return;
-        }
-
-        double step = Math.toRadians(maxStepDegrees);
-        double blend = Math.min(1.0, step / angle);
-        Vector blended = currentDirection.multiply(1.0 - blend).add(desired.multiply(blend)).normalize();
-        orientation.set(DartVisual.orientationFromDirection(blended));
+        orientation = DartVisual.rotateTowards(orientation, desiredDirection, maxStepDegrees);
     }
 
-    private Vector combatMovement(Vector toTarget) {
+    private Vector combatMovement() {
+        Vector nose = noseDirection();
         double distance = target.getLocation().distance(anchor);
         double preferred = config.combatDistance();
         double margin = config.combatDistanceMargin();
         double speed = config.flightSpeed() * config.chaseSpeedMultiplier();
 
         if (distance < preferred - margin) {
-            return toTarget.clone().multiply(-speed);
+            return nose.clone().multiply(-speed);
         }
         if (distance > preferred + margin) {
-            return toTarget.clone().multiply(speed);
+            return nose.clone().multiply(speed);
         }
-
-        Vector lateral = DartVisual.lateralFromOrientation(orientation);
-        double strafe = Math.sin(age * 0.14) * speed * 0.45;
-        Vector hold = lateral.clone().multiply(strafe);
 
         double distanceError = distance - preferred;
         if (Math.abs(distanceError) > 0.2) {
-            hold.add(toTarget.clone().multiply(Math.signum(distanceError) * speed * 0.25));
+            return nose.clone().multiply(Math.signum(distanceError) * speed * 0.3);
         }
 
-        return hold;
+        return new Vector(0, 0, 0);
     }
 
     private Vector noseDirection() {
@@ -258,7 +240,10 @@ public final class FlyingDart {
         if (aimTarget != null && aimTarget.isValid() && !aimTarget.isDead()) {
             Vector toTarget = aimPoint(aimTarget).subtract(tip.toVector());
             if (toTarget.lengthSquared() >= 0.01) {
-                shotDirection = toTarget.normalize();
+                toTarget.normalize();
+                if (shotDirection.dot(toTarget) < 0.9) {
+                    return;
+                }
             }
         }
 
@@ -280,15 +265,18 @@ public final class FlyingDart {
     }
 
     private boolean hasLineOfSight(LivingEntity entity) {
-        Location tip = visual.tipLocation(anchor, orientation);
-        Vector direction = aimPoint(entity).subtract(tip.toVector());
+        return hasLineOfSightFrom(visual.tipLocation(anchor, orientation), entity);
+    }
+
+    private boolean hasLineOfSightFrom(Location origin, LivingEntity entity) {
+        Vector direction = aimPoint(entity).subtract(origin.toVector());
         double distance = direction.length();
         if (distance < 0.25) {
             return true;
         }
         direction.normalize();
         RayTraceResult trace = world.rayTraceBlocks(
-                tip,
+                origin,
                 direction,
                 distance,
                 FluidCollisionMode.NEVER,
@@ -318,13 +306,16 @@ public final class FlyingDart {
         visual.remove();
     }
 
-    private LivingEntity findNearestTarget() {
+    private LivingEntity findNearestVisibleTarget() {
         double radius = config.targetRadius();
         LivingEntity nearest = null;
         double nearestDistanceSquared = radius * radius;
 
         for (LivingEntity entity : anchor.getNearbyLivingEntities(radius)) {
             if (!isValidTarget(entity)) {
+                continue;
+            }
+            if (!hasLineOfSightFrom(anchor, entity)) {
                 continue;
             }
             double distanceSquared = entity.getLocation().distanceSquared(anchor);

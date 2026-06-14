@@ -23,20 +23,40 @@ public final class SoulDartService {
         Location base = player.getLocation();
         float yaw = base.getYaw();
         Vector forward = DartVisual.directionFromOrientation(yaw, 0f);
+        Vector lateral = DartVisual.lateralFromOrientation(yaw, 0f);
 
-        Location spawn = base.clone().add(0, 2.0, 0).add(forward.clone().multiply(3.0));
-        snapToBlockCenter(spawn);
+        Location center = base.clone()
+                .add(0, 2.0, 0)
+                .add(forward.clone().multiply(config.spawnForwardDistance()));
 
-        FlyingDart dart = new FlyingDart(config, player, spawn, yaw);
-        dartManager.register(dart);
+        int count = config.spawnCount();
+        double spread = config.spawnSpread();
+
+        for (int index = 0; index < count; index++) {
+            Location spawn = spreadSpawnLocation(center, forward, lateral, spread, index, count);
+            FlyingDart dart = new FlyingDart(config, player, spawn, yaw);
+            dartManager.register(dart);
+        }
 
         player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_POWER_SELECT, 0.4f, 1.6f);
     }
 
-    private static void snapToBlockCenter(Location location) {
-        location.setX(Math.floor(location.getX()) + 0.5);
-        location.setY(Math.floor(location.getY()) + 0.5);
-        location.setZ(Math.floor(location.getZ()) + 0.5);
+    private static Location spreadSpawnLocation(
+            Location center,
+            Vector forward,
+            Vector lateral,
+            double spread,
+            int index,
+            int count
+    ) {
+        double angle = (Math.PI * 2.0 * index) / count;
+        double vertical = Math.sin(angle * 2.0) * spread * 0.12;
+
+        Vector offset = lateral.clone().multiply(Math.cos(angle) * spread)
+                .add(forward.clone().multiply(Math.sin(angle) * spread * 0.25))
+                .add(new Vector(0, vertical, 0));
+
+        return center.clone().add(offset);
     }
 
 }

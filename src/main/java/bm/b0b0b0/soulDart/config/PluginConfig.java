@@ -11,7 +11,19 @@ public final class PluginConfig {
     }
 
     public int lifetimeTicks() {
-        return settings.lifetimeTicks;
+        return Math.max(1, (int) Math.round(settings.lifetimeSeconds * 20.0));
+    }
+
+    public int spawnCount() {
+        return Math.max(1, settings.spawnCount);
+    }
+
+    public double spawnSpread() {
+        return Math.max(0.0, settings.spawnSpread);
+    }
+
+    public double spawnForwardDistance() {
+        return Math.max(1.0, settings.spawnForwardDistance);
     }
 
     public double targetRadius() {

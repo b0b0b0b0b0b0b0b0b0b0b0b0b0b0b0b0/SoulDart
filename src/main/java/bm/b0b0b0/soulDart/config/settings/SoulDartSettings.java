@@ -10,8 +10,17 @@ public class SoulDartSettings extends YamlSerializable {
 
     private static final SerializerConfig CONFIG = new SerializerConfig.Builder().build();
 
-    @Comment(@CommentValue("Время жизни объекта (тики, 20 = 1 сек)"))
-    public int lifetimeTicks = 200;
+    @Comment(@CommentValue("Время жизни объекта (секунды)"))
+    public double lifetimeSeconds = 30.0;
+
+    @Comment(@CommentValue("Сколько объектов выпускается за одну команду"))
+    public int spawnCount = 5;
+
+    @Comment(@CommentValue("Дистанция центра формации от игрока (блоки)"))
+    public double spawnForwardDistance = 8.0;
+
+    @Comment(@CommentValue("Радиус круга спавна вокруг центра (блоки)"))
+    public double spawnSpread = 10.0;
 
     @Comment(@CommentValue("Радиус поиска целей (блоки)"))
     public double targetRadius = 25.0;
@@ -26,7 +35,7 @@ public class SoulDartSettings extends YamlSerializable {
     public double wanderTurnSpeed = 1.6;
 
     @Comment(@CommentValue("Скорость поворота при захвате цели (градусы/тик)"))
-    public double targetTurnSpeed = 14.0;
+    public double targetTurnSpeed = 18.0;
 
     @Comment(@CommentValue("Скорость поворота носа по pitch при захвате цели (градусы/тик)"))
     public double targetPitchSpeed = 14.0;

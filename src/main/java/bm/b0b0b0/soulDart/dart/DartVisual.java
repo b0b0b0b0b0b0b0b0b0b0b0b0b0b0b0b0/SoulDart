@@ -24,6 +24,8 @@ public final class DartVisual {
             new SegmentSpec(0, 1, Material.RED_WOOL),
     };
 
+    private static final Vector MODEL_FORWARD = modelForwardAtRest();
+
     private final List<BlockDisplay> displays = new ArrayList<>(SEGMENTS.length);
     private final Matrix4f[] segmentMatrices = new Matrix4f[SEGMENTS.length];
     private final SegmentSpec tipSegment = SEGMENTS[SEGMENTS.length - 1];
@@ -115,16 +117,18 @@ public final class DartVisual {
         displays.clear();
     }
 
-    public static final Vector3f LOCAL_FORWARD = new Vector3f(1f, 0f, 0f);
-
     public static Vector directionFromOrientation(float yaw, float pitch) {
         return directionFromOrientation(orientationFromYawPitch(yaw, pitch));
     }
 
     public static Vector directionFromOrientation(Quaternionf orientation) {
-        Vector3f forward = new Vector3f(LOCAL_FORWARD);
-        orientation.transform(forward);
-        return new Vector(forward.x, forward.y, forward.z).normalize();
+        Vector3f localNose = new Vector3f(
+                tipSegmentStatic().lateral + 0.5f,
+                0f,
+                tipSegmentStatic().forward
+        );
+        orientation.transform(localNose);
+        return new Vector(localNose.x, localNose.y, localNose.z).normalize();
     }
 
     public static Vector lateralFromOrientation(Quaternionf orientation) {
@@ -147,13 +151,32 @@ public final class DartVisual {
         }
         normalized.normalize();
         return new Quaternionf().rotationTo(
-                LOCAL_FORWARD.x,
-                LOCAL_FORWARD.y,
-                LOCAL_FORWARD.z,
+                (float) MODEL_FORWARD.getX(),
+                (float) MODEL_FORWARD.getY(),
+                (float) MODEL_FORWARD.getZ(),
                 (float) normalized.getX(),
                 (float) normalized.getY(),
                 (float) normalized.getZ()
         );
+    }
+
+    public static Quaternionf rotateTowards(Quaternionf current, Vector desiredDirection, float maxStepDegrees) {
+        Vector desired = desiredDirection.clone();
+        if (desired.lengthSquared() < 0.0001) {
+            return new Quaternionf(current);
+        }
+        desired.normalize();
+
+        Vector currentForward = directionFromOrientation(current);
+        double dot = clamp(currentForward.dot(desired), -1.0, 1.0);
+        if (dot > 0.9995) {
+            return orientationFromDirection(desired);
+        }
+
+        double angle = Math.acos(dot);
+        Quaternionf target = orientationFromDirection(desired);
+        float blend = (float) Math.min(1.0, Math.toRadians(maxStepDegrees) / angle);
+        return new Quaternionf(current).slerp(target, blend);
     }
 
     public static Quaternionf orientationFromYawPitch(float yaw, float pitch) {
@@ -174,6 +197,15 @@ public final class DartVisual {
 
     public static Matrix4f groupRotation(float yaw, float pitch) {
         return matrixFromOrientation(orientationFromYawPitch(yaw, pitch));
+    }
+
+    private static Vector modelForwardAtRest() {
+        SegmentSpec tip = SEGMENTS[SEGMENTS.length - 1];
+        return new Vector(tip.lateral + 0.5, 0, tip.forward).normalize();
+    }
+
+    private static SegmentSpec tipSegmentStatic() {
+        return SEGMENTS[SEGMENTS.length - 1];
     }
 
     private static Matrix4f localMatrix(int lateral, int forward) {
