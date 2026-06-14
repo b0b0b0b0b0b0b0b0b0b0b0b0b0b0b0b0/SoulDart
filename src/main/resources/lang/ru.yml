@@ -1,0 +1,3 @@
+launch-success: "<light_purple>✦ <white>Он летит!"
+no-permission: "<red>У вас нет прав на эту команду."
+players-only: "<red>Команда доступна только игрокам."

@@ -1,0 +1,3 @@
+launch-success: "<light_purple>✦ <white>It's flying!"
+no-permission: "<red>You do not have permission to use this command."
+players-only: "<red>This command can only be used by players."

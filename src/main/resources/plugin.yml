@@ -1,0 +1,18 @@
+name: SoulDart
+version: '${version}'
+main: bm.b0b0b0.soulDart.SoulDart
+api-version: '1.21'
+authors: [ b0b0b0 ]
+
+libraries:
+  - net.elytrium:serializer:1.1.1
+
+commands:
+  souldart:
+    description: Launch flying Soul Darts
+    aliases: [ sd ]
+
+permissions:
+  souldart.use:
+    description: Allows launching Soul Darts
+    default: op
