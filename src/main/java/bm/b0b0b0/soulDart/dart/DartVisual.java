@@ -24,7 +24,8 @@ public final class DartVisual {
             new SegmentSpec(0, 1, Material.RED_WOOL),
     };
 
-    private static final Vector MODEL_FORWARD = modelForwardAtRest();
+    private static final float BLOCK_SCALE = 0.998f;
+    private static final Vector REST_FORWARD = restForward();
 
     private final List<BlockDisplay> displays = new ArrayList<>(SEGMENTS.length);
     private final Matrix4f[] segmentMatrices = new Matrix4f[SEGMENTS.length];
@@ -39,7 +40,9 @@ public final class DartVisual {
                 entity.setBillboard(Display.Billboard.FIXED);
                 entity.setPersistent(false);
                 entity.setGravity(false);
+                entity.setBrightness(new Display.Brightness(15, 15));
                 entity.setInterpolationDuration(0);
+                entity.setInterpolationDelay(0);
                 entity.setTeleportDuration(0);
             });
             displays.add(display);
@@ -76,8 +79,9 @@ public final class DartVisual {
                 current.rotateY(spinStrength * spinTick);
             }
             BlockDisplay display = displays.get(index);
-            display.setInterpolationDuration(2);
+            display.setInterpolationDuration(0);
             display.setInterpolationDelay(0);
+            display.setTeleportDuration(0);
             display.teleport(pivot);
             display.setTransformationMatrix(current);
         }
@@ -89,8 +93,9 @@ public final class DartVisual {
         for (int index = 0; index < displays.size(); index++) {
             BlockDisplay display = displays.get(index);
             Matrix4f matrix = new Matrix4f(rotation).mul(segmentMatrices[index]);
-            display.setInterpolationDuration(1);
+            display.setInterpolationDuration(0);
             display.setInterpolationDelay(0);
+            display.setTeleportDuration(0);
             display.teleport(pivot);
             display.setTransformationMatrix(matrix);
         }
@@ -101,9 +106,8 @@ public final class DartVisual {
     }
 
     public Location tipLocation(Location pivot, Quaternionf orientation) {
-        Vector3f localNose = new Vector3f(tipSegment.lateral + 0.5f, 0f, tipSegment.forward);
-        orientation.transform(localNose);
-        return pivot.clone().add(localNose.x, localNose.y, localNose.z);
+        Vector3f nose = segmentPoint(orientation, tipSegment, 1f, 0.5f, 0.5f);
+        return pivot.clone().add(nose.x, nose.y, nose.z);
     }
 
     public Location tipLocation(Location pivot, float yaw, float pitch) {
@@ -122,13 +126,9 @@ public final class DartVisual {
     }
 
     public static Vector directionFromOrientation(Quaternionf orientation) {
-        Vector3f localNose = new Vector3f(
-                tipSegmentStatic().lateral + 0.5f,
-                0f,
-                tipSegmentStatic().forward
-        );
-        orientation.transform(localNose);
-        return new Vector(localNose.x, localNose.y, localNose.z).normalize();
+        Vector3f nose = segmentPoint(orientation, tipSegment(), 1f, 0.5f, 0.5f);
+        Vector3f tail = segmentPoint(orientation, SEGMENTS[3], 0.5f, 0.5f, 0.5f);
+        return new Vector(nose.x - tail.x, nose.y - tail.y, nose.z - tail.z).normalize();
     }
 
     public static Vector lateralFromOrientation(Quaternionf orientation) {
@@ -151,9 +151,9 @@ public final class DartVisual {
         }
         normalized.normalize();
         return new Quaternionf().rotationTo(
-                (float) MODEL_FORWARD.getX(),
-                (float) MODEL_FORWARD.getY(),
-                (float) MODEL_FORWARD.getZ(),
+                (float) REST_FORWARD.getX(),
+                (float) REST_FORWARD.getY(),
+                (float) REST_FORWARD.getZ(),
                 (float) normalized.getX(),
                 (float) normalized.getY(),
                 (float) normalized.getZ()
@@ -199,18 +199,29 @@ public final class DartVisual {
         return matrixFromOrientation(orientationFromYawPitch(yaw, pitch));
     }
 
-    private static Vector modelForwardAtRest() {
-        SegmentSpec tip = SEGMENTS[SEGMENTS.length - 1];
-        return new Vector(tip.lateral + 0.5, 0, tip.forward).normalize();
+    private static Vector restForward() {
+        Vector3f nose = segmentPoint(new Quaternionf(), tipSegment(), 1f, 0.5f, 0.5f);
+        Vector3f tail = segmentPoint(new Quaternionf(), SEGMENTS[3], 0.5f, 0.5f, 0.5f);
+        return new Vector(nose.x - tail.x, nose.y - tail.y, nose.z - tail.z).normalize();
     }
 
-    private static SegmentSpec tipSegmentStatic() {
+    private static SegmentSpec tipSegment() {
         return SEGMENTS[SEGMENTS.length - 1];
+    }
+
+    private static Vector3f segmentPoint(Quaternionf orientation, SegmentSpec segment, float x, float y, float z) {
+        Matrix4f matrix = new Matrix4f(matrixFromOrientation(orientation)).mul(localMatrix(segment.lateral, segment.forward));
+        Vector3f point = new Vector3f(x, y, z);
+        matrix.transformPosition(point);
+        return point;
     }
 
     private static Matrix4f localMatrix(int lateral, int forward) {
         return new Matrix4f()
                 .translate(lateral, 0f, forward)
+                .translate(-0.5f, -0.5f, -0.5f)
+                .translate(0.5f, 0.5f, 0.5f)
+                .scale(BLOCK_SCALE)
                 .translate(-0.5f, -0.5f, -0.5f);
     }
 

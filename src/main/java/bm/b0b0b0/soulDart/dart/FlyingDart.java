@@ -117,7 +117,7 @@ public final class FlyingDart {
 
         Vector lateral = DartVisual.lateralFromOrientation(orientation);
         double bob = target == null ? Math.sin(age * 0.11) * config.bobAmplitude() : 0;
-        double sway = target == null ? Math.sin(age * 0.075) * config.swayAmplitude() : Math.sin(age * 0.075) * config.swayAmplitude() * 0.25;
+        double sway = target == null ? Math.sin(age * 0.075) * config.swayAmplitude() : 0;
 
         anchor.add(velocity);
         anchor.setY(anchor.getY() + bob);
@@ -143,6 +143,7 @@ public final class FlyingDart {
 
         if (progress >= 1f) {
             assembled = true;
+            orientation = DartVisual.orientationFromYawPitch(spawnYaw, 0f);
             velocity = DartVisual.directionFromOrientation(orientation).multiply(config.flightSpeed() * 0.35);
             visual.update(anchor, orientation);
             world.playSound(anchor, Sound.BLOCK_WOOL_PLACE, 0.8f, 0.7f);
@@ -241,9 +242,10 @@ public final class FlyingDart {
             Vector toTarget = aimPoint(aimTarget).subtract(tip.toVector());
             if (toTarget.lengthSquared() >= 0.01) {
                 toTarget.normalize();
-                if (shotDirection.dot(toTarget) < 0.9) {
+                if (shotDirection.dot(toTarget) < 0.85) {
                     return;
                 }
+                shotDirection = toTarget;
             }
         }
 
